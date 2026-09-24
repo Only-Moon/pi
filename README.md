@@ -86,3 +86,7 @@ Just wanted to be import opencode sessions directly in pi so I can continue ther
 As you can see, the first two features are implemented were inspired by Codex CLI, so it only makes sense to add support for it here. This was implemented via PR https://github.com/atharva-again/pi/pull/12. You can watch the demo below. Detailed README for the extension can be found [here](https://github.com/atharva-again/pi/blob/main/packages/coding-agent/examples/extensions/resume-codex/README.md).
 
 <img width="723" height="455" alt="pi-codex-resume" src="https://github.com/user-attachments/assets/4b4778bc-871c-4a54-b52f-7f5a21ab5d86" />
+
+### 7. Codex Usage Status
+
+Added a `/status` extension for checking live ChatGPT Codex usage. It displays 5-hour and 7-day limits, credits, reset information, and blocked states, with RPC notifications for Telegram clients. See PR https://github.com/atharva-again/pi/pull/22 and the [extension source](https://github.com/atharva-again/pi/blob/main/packages/coding-agent/examples/extensions/codex-status.ts).
