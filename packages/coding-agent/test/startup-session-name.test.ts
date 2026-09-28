@@ -1,10 +1,9 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ENV_AGENT_DIR } from "../src/config.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
 
 const cliPath = resolve(__dirname, "../src/cli.ts");
 const sourceResolverPath = resolve(__dirname, "../src/experimental/source-resolver.ts");
@@ -56,10 +55,13 @@ function createSessionFile(projectDir: string, sessionFile: string): void {
 	);
 }
 
-async function readSessionInfoNames(cwd: string, sessionDir: string): Promise<string[]> {
-	return (await SessionManager.list(cwd, sessionDir))
-		.map((session) => session.name)
-		.filter((name): name is string => !!name);
+function readSessionInfoNames(sessionFile: string): string[] {
+	return readFileSync(sessionFile, "utf8")
+		.trim()
+		.split("\n")
+		.map((line) => JSON.parse(line) as { type?: string; name?: string })
+		.filter((entry) => entry.type === "session_info")
+		.map((entry) => entry.name ?? "");
 }
 
 async function runCli(args: string[], dirs: CliDirs): Promise<CliResult> {
@@ -115,6 +117,6 @@ describe("startup session name", () => {
 
 		expect(result.code).toBe(1);
 		expect(result.signal).toBeNull();
-		expect(await readSessionInfoNames(dirs.projectDir, dirs.agentDir)).toEqual(["CLI Named Session"]);
+		expect(readSessionInfoNames(dirs.sessionFile)).toEqual(["CLI Named Session"]);
 	});
 });

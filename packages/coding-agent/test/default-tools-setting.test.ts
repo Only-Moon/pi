@@ -29,11 +29,11 @@ describe("defaultTools setting", () => {
 	});
 
 	async function createSession(
-		defaultTools?: string[],
+		defaultTools: string[],
 		options: ToolOptions = {},
 		extensionFactories: InlineExtension[] = [],
 	) {
-		const settingsManager = SettingsManager.inMemory(defaultTools ? { defaultTools } : {});
+		const settingsManager = SettingsManager.inMemory({ defaultTools });
 		const resourceLoader = new DefaultResourceLoader({
 			cwd: tempDir,
 			agentDir,
@@ -55,22 +55,6 @@ describe("defaultTools setting", () => {
 		).session;
 	}
 
-	it("enables session search alongside the standard tools by default", async () => {
-		const session = await createSession();
-
-		expect(session.getActiveToolNames()).toEqual([
-			"read",
-			"bash",
-			"edit",
-			"write",
-			"search_sessions",
-			"read_session_context",
-		]);
-		expect(session.systemPrompt).toContain("- search_sessions:");
-		expect(session.systemPrompt).toContain("- read_session_context:");
-		session.dispose();
-	});
-
 	it("uses the configured list as the initial built-in selection", async () => {
 		const session = await createSession(["grep", "find"]);
 
@@ -79,18 +63,7 @@ describe("defaultTools setting", () => {
 				.getAllTools()
 				.map((tool) => tool.name)
 				.sort(),
-		).toEqual([
-			"bash",
-			"edit",
-			"find",
-			"grep",
-			"ls",
-			"powershell",
-			"read",
-			"read_session_context",
-			"search_sessions",
-			"write",
-		]);
+		).toEqual(["bash", "edit", "find", "grep", "ls", "powershell", "read", "write"]);
 		expect(session.getActiveToolNames()).toEqual(["grep", "find"]);
 		expect(session.systemPrompt).toContain("- grep:");
 		expect(session.systemPrompt).not.toContain("- read:");
@@ -179,18 +152,7 @@ describe("defaultTools setting", () => {
 				.getAllTools()
 				.map((tool) => tool.name)
 				.sort(),
-		).toEqual([
-			"bash",
-			"edit",
-			"find",
-			"grep",
-			"ls",
-			"powershell",
-			"read",
-			"read_session_context",
-			"search_sessions",
-			"write",
-		]);
+		).toEqual(["bash", "edit", "find", "grep", "ls", "powershell", "read", "write"]);
 		expect(session.getActiveToolNames()).toEqual(["ls"]);
 		session.dispose();
 	});

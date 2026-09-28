@@ -256,9 +256,7 @@ export {
 	createLsTool,
 	createPowerShellTool,
 	createReadOnlyTools,
-	createReadSessionContextTool,
 	createReadTool,
-	createSearchSessionsTool,
 	createWriteTool,
 	type PromptTemplate,
 } from "./core/sdk.ts";

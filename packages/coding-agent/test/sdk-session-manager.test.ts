@@ -25,7 +25,7 @@ describe("createAgentSession session manager defaults", () => {
 		}
 	});
 
-	it("uses one database under agentDir for the default persisted session", async () => {
+	it("uses agentDir for the default persisted session path", async () => {
 		const model = getModel("anthropic", "claude-sonnet-4-5");
 		expect(model).toBeTruthy();
 
@@ -35,11 +35,13 @@ describe("createAgentSession session manager defaults", () => {
 			model: model!,
 		});
 
-		const expectedDatabasePath = join(agentDir, "sessions.db");
+		const safePath = `--${cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
+		const expectedSessionDir = join(agentDir, "sessions", safePath);
+		const sessionDir = session.sessionManager.getSessionDir();
 		const sessionFile = session.sessionManager.getSessionFile();
 
-		expect(session.sessionManager.getSessionDatabasePath()).toBe(expectedDatabasePath);
-		expect(sessionFile).toMatch(/^pi-session:\/\//);
+		expect(sessionDir).toBe(expectedSessionDir);
+		expect(sessionFile?.startsWith(`${expectedSessionDir}/`)).toBe(true);
 
 		session.dispose();
 	});
@@ -118,7 +120,7 @@ describe("createAgentSession session manager defaults", () => {
 
 		expect(output.trim().split("\n")).toEqual([
 			session.sessionId,
-			session.sessionManager.getSessionDatabasePath(),
+			session.sessionFile,
 			model!.provider,
 			model!.id,
 			session.thinkingLevel,

@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setKeybindings } from "@earendil-works/pi-tui";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SessionPinStore } from "../src/core/session-pin-store.ts";
@@ -46,7 +46,6 @@ describe("session selector pins", () => {
 	});
 
 	afterEach(() => {
-		vi.restoreAllMocks();
 		for (const dir of tempDirs.splice(0)) {
 			rmSync(dir, { recursive: true, force: true });
 		}
@@ -68,7 +67,6 @@ describe("session selector pins", () => {
 
 		const loadSessions = () => SessionManager.list(cwd, sessionDir);
 		const initialSessions = await loadSessions();
-		const olderLocator = initialSessions.find((session) => session.id === "older")?.path;
 		const keybindings = new KeybindingsManager();
 		const selector = new SessionSelectorComponent(
 			async () => initialSessions,
@@ -87,10 +85,10 @@ describe("session selector pins", () => {
 		expect(output).not.toContain("path (off)");
 		expect(output.indexOf("Older pinned")).toBeLessThan(output.indexOf("Newer regular"));
 		expect(output).toContain("◆ Older pinned");
-		expect(selector.getSessionList().getSelectedSessionPath()).toBe(olderLocator);
+		expect(selector.getSessionList().getSelectedSessionPath()).toBe(olderPath);
 
 		selector.getSessionList().handleInput(CTRL_P);
-		expect(selector.getSessionList().getSelectedSessionPath()).toBe(olderLocator);
+		expect(selector.getSessionList().getSelectedSessionPath()).toBe(olderPath);
 		expect(pinStore.getPinnedSessionPaths()).toEqual(new Set());
 		output = stripAnsi(selector.render(120).join("\n"));
 		expect(output.indexOf("Newer regular")).toBeLessThan(output.indexOf("Older pinned"));
@@ -101,7 +99,7 @@ describe("session selector pins", () => {
 		expect(output.indexOf("Older pinned")).toBeLessThan(output.indexOf("Newer regular"));
 	});
 
-	it("unpins a migrated session after its legacy symlink disappears", async () => {
+	it("unpins with the retained canonical path after a session symlink disappears", async () => {
 		const tempDir = mkdtempSync(join(tmpdir(), "pi-session-selector-pin-symlink-"));
 		tempDirs.push(tempDir);
 		const sessionPath = join(tempDir, "session.jsonl");
@@ -114,7 +112,7 @@ describe("session selector pins", () => {
 		pinStore.setPinned(sessionAliasPath, true);
 		const keybindings = new KeybindingsManager();
 		const selector = new SessionSelectorComponent(
-			async () => sessions,
+			async () => sessions.map((session) => ({ ...session, path: sessionAliasPath })),
 			async () => [],
 			() => {},
 			() => {},
@@ -123,7 +121,7 @@ describe("session selector pins", () => {
 			{ keybindings, pinStorePath },
 		);
 		await flushPromises();
-		expect(pinStore.getPinnedSessionPaths()).toEqual(new Set([sessions[0]!.path]));
+		expect(pinStore.getPinnedSessionPaths()).toEqual(new Set([realpathSync(sessionPath)]));
 		rmSync(sessionAliasPath);
 
 		selector.getSessionList().handleInput(CTRL_P);
@@ -156,7 +154,7 @@ describe("session selector pins", () => {
 		);
 		await flushPromises();
 
-		expect(selector.getSessionList().getSelectedSessionPath()).toBe(sessions[0]?.path);
+		expect(selector.getSessionList().getSelectedSessionPath()).toBe(sessionPath);
 		selector.getSessionList().handleInput(CTRL_D);
 		selector.getSessionList().handleInput("\r");
 		for (let attempt = 0; attempt < 20 && pinStore.getPinnedSessionPaths().size > 0; attempt++) {
@@ -166,7 +164,7 @@ describe("session selector pins", () => {
 		expect(pinStore.getPinnedSessionPaths()).toEqual(new Set());
 	});
 
-	it("shows an error when the selected database session disappears before pinning", async () => {
+	it("shows an error when the selected session disappears before pinning", async () => {
 		const tempDir = mkdtempSync(join(tmpdir(), "pi-session-selector-pin-missing-"));
 		tempDirs.push(tempDir);
 		const sessionPath = join(tempDir, "session.jsonl");
@@ -184,40 +182,12 @@ describe("session selector pins", () => {
 			{ keybindings, pinStorePath },
 		);
 		await flushPromises();
-		SessionManager.delete(sessions[0]!.path);
+		rmSync(sessionPath);
 
 		selector.getSessionList().handleInput(CTRL_P);
 
 		const output = stripAnsi(selector.render(120).join("\n"));
-		expect(output).toContain("Failed to update pin: Session no longer exists");
+		expect(output).toContain("Failed to update pin: Session file no longer exists");
 		expect(new SessionPinStore(pinStorePath).getPinnedSessionPaths()).toEqual(new Set());
-	});
-
-	it("surfaces legacy pin migration errors while loading sessions", async () => {
-		const tempDir = mkdtempSync(join(tmpdir(), "pi-session-selector-pin-migration-error-"));
-		tempDirs.push(tempDir);
-		const sessionPath = join(tempDir, "legacy.jsonl");
-		const pinStorePath = join(tempDir, "session-pins.json");
-		writeSession(sessionPath, "session", tempDir, "2026-01-01T00:00:00.000Z", "Legacy pinned session");
-		const sessions = await SessionManager.list(tempDir, tempDir);
-		new SessionPinStore(pinStorePath).setPinned(sessionPath, true);
-		vi.spyOn(SessionPinStore.prototype, "migratePinnedPath").mockImplementation(() => {
-			throw new Error("legacy pin rewrite failed");
-		});
-		const keybindings = new KeybindingsManager();
-		const selector = new SessionSelectorComponent(
-			async () => sessions,
-			async () => sessions,
-			() => {},
-			() => {},
-			() => {},
-			() => {},
-			{ keybindings, pinStorePath },
-		);
-		await flushPromises();
-
-		expect(stripAnsi(selector.render(120).join("\n"))).toContain(
-			"Failed to load sessions: legacy pin rewrite failed",
-		);
 	});
 });

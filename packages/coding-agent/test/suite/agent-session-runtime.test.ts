@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, parse } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@earendil-works/pi-ai/compat";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
@@ -11,7 +11,6 @@ import {
 	createAgentSessionServices,
 } from "../../src/core/agent-session-runtime.ts";
 import { AuthStorage } from "../../src/core/auth-storage.ts";
-import { parseSessionLocator } from "../../src/core/session-locator.ts";
 import { SessionManager } from "../../src/core/session-manager.ts";
 import type {
 	AgentToolResult,
@@ -40,7 +39,7 @@ describe("AgentSessionRuntime characterization", () => {
 
 	async function createRuntimeForTest(
 		extensionFactory: ExtensionFactory,
-		options?: { cwd?: string; sessionDir?: string; bootstrapModel?: boolean; bootstrapThinkingLevel?: boolean },
+		options?: { cwd?: string; bootstrapModel?: boolean; bootstrapThinkingLevel?: boolean },
 	) {
 		const tempDir =
 			options?.cwd ?? join(tmpdir(), `pi-runtime-suite-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -108,7 +107,7 @@ describe("AgentSessionRuntime characterization", () => {
 		const runtime = await createAgentSessionRuntime(createRuntime, {
 			cwd: tempDir,
 			agentDir: tempDir,
-			sessionManager: SessionManager.create(tempDir, options?.sessionDir),
+			sessionManager: SessionManager.create(tempDir),
 		});
 		await runtime.session.bindExtensions({});
 
@@ -244,31 +243,7 @@ describe("AgentSessionRuntime characterization", () => {
 
 		expect(readFileSync(storedPath, "utf8")).toBe(storedSession);
 		expect(runtime.session.sessionFile).not.toBe(storedPath);
-		const importedSessionFile = runtime.session.sessionFile;
-		if (!importedSessionFile) throw new Error("Expected imported session locator");
-		expect(SessionManager.open(importedSessionFile).getSessionId()).toBe("imported");
-	});
-
-	it("imports a switched legacy path into the active custom session database", async () => {
-		const cwd = join(tmpdir(), `pi-runtime-custom-session-dir-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-		const sessionDir = join(cwd, "session-store");
-		const { runtime } = await createRuntimeForTest(() => {}, { cwd, sessionDir });
-		const legacyPath = join(cwd, "legacy.jsonl");
-		writeFileSync(
-			legacyPath,
-			`${JSON.stringify({
-				type: "session",
-				version: 3,
-				id: "switched-legacy",
-				timestamp: new Date().toISOString(),
-				cwd,
-			})}\n`,
-		);
-
-		await runtime.switchSession(legacyPath);
-
-		expect(runtime.session.sessionManager.getSessionDatabasePath()).toBe(join(sessionDir, "sessions.db"));
-		expect(runtime.session.sessionManager.getSessionId()).toBe("switched-legacy");
+		expect(readFileSync(runtime.session.sessionFile!, "utf8")).toContain('"id":"imported"');
 	});
 
 	it("emits session_before_switch and session_start for new and resume flows", async () => {
@@ -384,7 +359,8 @@ describe("AgentSessionRuntime characterization", () => {
 			{ type: "session_shutdown", reason: "fork", targetSessionFile: runtime.session.sessionFile },
 			{ type: "session_start", reason: "fork", previousSessionFile },
 		]);
-		expect(parseSessionLocator(runtime.session.sessionFile!)?.sessionId).toBe(runtime.session.sessionId);
+		const sessionFileName = parse(runtime.session.sessionFile!).name;
+		expect(sessionFileName.endsWith(`_${runtime.session.sessionId}`)).toBe(true);
 
 		events.length = 0;
 		cancelNextFork = true;

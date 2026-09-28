@@ -42,7 +42,6 @@ function createSessionManager(options: { sessionFile?: string } = {}): SessionMa
 		getSessionFile: () => options.sessionFile,
 		getSessionId: () => "test-session",
 		getSessionDir: () => "/tmp/pi-sessions",
-		hasStoredSession: () => options.sessionFile !== undefined,
 		usesDefaultSessionDir: () => true,
 	} as unknown as SessionManager;
 }
@@ -142,14 +141,13 @@ describe("InteractiveMode.shutdown ordering (#5080)", () => {
 			.mockImplementation((() => true) as typeof process.stdout.write);
 		setStdoutIsTTY(true);
 		const order: string[] = [];
-		const sessionFile = createTempFile();
-		const context = createContext(order, createSessionManager({ sessionFile }));
+		const context = createContext(order, createSessionManager({ sessionFile: createTempFile() }));
 
 		await callShutdown(context);
 
 		expect(order).toEqual(["drainInput", "stop", "dispose"]);
 		expect(stdoutWrite).toHaveBeenCalledWith(
-			`${chalk.dim("To resume this session:")} ${APP_NAME} --session ${sessionFile}\n`,
+			`${chalk.dim("To resume this session:")} ${APP_NAME} --session test-session\n`,
 		);
 	});
 
